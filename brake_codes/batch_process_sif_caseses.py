@@ -1,0 +1,195 @@
+import os
+
+# ─── OUTPUT FOLDER ────────────────────────────────────────────────────────
+OUTPUT_DIR = "brake_sif_cases"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# ─── PARAMETER SETS ───────────────────────────────────────────────────────
+pouring_temperatures = [953, 973, 993, 1013, 1033]
+mould_temperatures   = [303, 353, 403]
+
+# ─── TEMPLATE (embedded directly, placeholders: {pour_temp} and {mould_temp}) ──
+SIF_TEMPLATE = """Header
+  CHECK KEYWORDS Warn
+  Mesh DB "." "variant_001"
+  Include Path ""
+  Results Directory "results"
+End
+
+! --- SIMULATION SETUP ------------------------------------------------------
+Simulation
+  Max Output Level = 5
+  Coordinate System = String "Cartesian"
+  Coordinate Mapping(3) = 1 2 3
+
+  Coordinate Scaling = Real 0.001
+  Simulation Type = String "Transient"
+
+  Timestepping Method = String "BDF"
+  BDF Order = 2
+
+  Steady State Max Iterations = 5
+
+  Timestep intervals(5) = 60    260   113   198   6
+  Timestep Sizes(5)     = 0.02  0.01  0.5   5.0   25.0
+
+  Timing = Logical True
+  Timing Info = Logical True
+End
+
+Constants
+  Gravity(4) = 0 0 -1 9.81
+  Stefan Boltzmann = 5.67e-08
+End
+
+! --- BODY -------------------------------------------------------------------
+Body 1
+  Target Bodies(1) = 2
+  Name = String "body1"
+  Equation = 1
+  Material = 1
+  Initial Condition = 1
+End
+
+! --- INITIAL CONDITIONS ------------------------------------------------------
+Initial Condition 1
+  Name = String "Freshly_Poured_Mold"
+  Temperature = Real {pour_temp}
+End
+
+! --- MATERIAL: LM6 / AlSi12 ---------------------------------------------------
+Material 1
+  Name = String "LM6_Aluminum_Alloy"
+  Density = Real 2650.0
+  Reference Temperature = Real 933.0
+
+  Enthalpy = Variable Temperature
+    Real
+      293.0      0.0
+      849.9      0.0
+      850.0      0.0
+      886.0  390000.0
+      1000.0 390000.0
+    End
+
+  Heat Capacity = Variable Temperature
+    Real
+      293.0    871.0
+      473.0    920.0
+      673.0    963.0
+      850.0   1050.0
+      886.0   1080.0
+      1000.0  1080.0
+    End
+
+  Heat Conductivity = Variable Temperature
+    Real
+      293.0   155.0
+      473.0   159.0
+      673.0   163.0
+      850.0   100.0
+      886.0    90.0
+      1000.0   90.0
+    End
+End
+
+! --- EQUATION -----------------------------------------------------------------
+Equation 1
+  Name = String "Thermal_Only"
+  Active Solvers(4) = 1 2 3 4
+  Convection = String "None"
+  Phase Change Model = String "Spatial 2"
+End
+
+! --- SOLVER 1: HEAT EQUATION ---------------------------------------------------
+Solver 1
+  Equation = String "Heat Equation"
+  Variable = String "Temperature"
+  Procedure = File "HeatSolve" "HeatSolver"
+
+  Linear System Solver = String "Iterative"
+  Linear System Iterative Method = String "BiCGStab"
+  Linear System Max Iterations = 500
+  Linear System Convergence Tolerance = 1.0e-6
+  Linear System Preconditioning = String "ILU1"
+  Linear System Abort Not Converged = Logical True
+  Linear System Residual Output = Integer 1
+
+  Nonlinear System Max Iterations = 20
+  Nonlinear System Convergence Tolerance = 1.0e-5
+  Nonlinear System Newton After Iterations = 8
+  Nonlinear System Newton After Tolerance = 1.0e-3
+  Nonlinear System Abort Not Converged = Logical True
+End
+
+! --- SOLVER 2: FLUX & GRADIENT --------------------------------------------------
+Solver 2
+  Equation = String "Flux and Gradient"
+  Procedure = File "FluxSolver" "FluxSolver"
+  Exec Solver = String "After Timestep"
+  Calculate Grad = Logical True
+  Target Variable = String "Temperature"
+  Linear System Solver = String "Iterative"
+  Linear System Iterative Method = String "CG"
+  Linear System Preconditioning = String "ILU0"
+  Linear System Max Iterations = 500
+  Linear System Convergence Tolerance = 1.0e-7
+End
+
+! --- SOLVER 3: VTU OUTPUT ---------------------------------------------------------
+Solver 3
+  Equation = String "ResultOutput"
+  Procedure = File "ResultOutputSolve" "ResultOutputSolver"
+  Exec Solver = String "After Timestep"
+  Output Format = String "Vtu"
+  Output File Name = File "variant_001_data"
+  Save Geometry Ids = Logical True
+  Scalar Field 1 = String "Temperature"
+End
+
+! --- SOLVER 4: TRUE t=0 SNAPSHOT (diagnostic, keep for now) ----------------------
+Solver 4
+  Equation = String "ResultOutput_IC"
+  Procedure = File "ResultOutputSolve" "ResultOutputSolver"
+  Exec Solver = String "Before Simulation"
+  Output Format = String "Vtu"
+  Output File Name = File "variant_001_ic"
+  Save Geometry Ids = Logical True
+  Scalar Field 1 = String "Temperature"
+End
+
+! --- BOUNDARY CONDITIONS -------------------------------------------------------
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Name = String "Variant_001_Surface"
+  External Temperature = Real {mould_temp}
+  Heat Transfer Coefficient = Variable Temperature
+    Real
+      293.0    35.0
+      850.0   110.0
+      868.0   300.0
+      886.0   633.3
+      993.0   633.3
+    End
+End
+"""
+
+# ─── GENERATE FILES ───────────────────────────────────────────────────────
+count = 0
+for pour_temp in pouring_temperatures:
+    for mould_temp in mould_temperatures:
+        sif_content = SIF_TEMPLATE.format(
+            pour_temp=f"{pour_temp}.0",
+            mould_temp=f"{mould_temp}.0"
+        )
+
+        filename = f"case_{pour_temp}_{mould_temp}.sif"
+        filepath = os.path.join(OUTPUT_DIR, filename)
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(sif_content)
+
+        count += 1
+        print(f"Generated: {filepath}")
+
+print(f"\nDone. {count} SIF files written to '{OUTPUT_DIR}/'")

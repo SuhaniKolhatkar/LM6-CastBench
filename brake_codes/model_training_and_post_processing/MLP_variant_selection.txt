@@ -1,0 +1,14 @@
+=== Suggested variants to visualize in Stage 2 ===
+  BEST   : Brake_p993_m403_v03   (mean err = 1.989 K)
+  MEDIAN : Brake_p973_m353_v04   (mean err = 7.011 K)
+  WORST  : Brake_p1033_m303_v02   (mean err = 21.085 K)
+
+even though we have got this we will be using the ones which are consistent with the mertics_csv provided from the model training 
+
+so the variants we will be considering will be :-
+	sim_id	mean abs err (K)	max abs err (K)
+BEST	Brake_p953_m403_v03	3.47	29.04
+MEDIAN	Brake_p993_m303_v09	7.05	36.19
+WORST	Brake_p1033_m303_v02	21.09	65.29
+
+these are consistent with the metrics 
