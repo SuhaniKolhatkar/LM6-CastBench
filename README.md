@@ -15,7 +15,3 @@ Each folder mirrors the same end-to-end workflow described in the paper, applied
 The full simulation dataset is hosted on Hugging Face:
 
 **Hugging Face dataset:** https://huggingface.co/datasets/Prism-vet/LM6-CastBench
-
-## Citation
-
-If you use this code or dataset, please cite the accompanying paper.
