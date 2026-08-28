@@ -1,0 +1,180 @@
+Header
+  CHECK KEYWORDS Warn
+  Mesh DB "." "mesh_db"
+  Include Path ""
+  Results Directory "results"
+End
+
+! ============================================================================
+! FLANGE VARIANT 1 - PROCESS PARAMETER SWEEP CASE
+!   Pouring temperature = 1013 K
+!   Mould temperature   = 303 K
+! ============================================================================
+! Same validated geometry, mesh, and alloy physics as the reference
+! flange_1.sif. Two physical inputs differ for this case:
+!
+!   1. Initial Condition 1 -> Temperature = 1013.0
+!      (melt temperature at the moment the mould cavity is filled)
+!
+!   2. Boundary Condition 1 -> External Temperature = 303.0
+!      (mould preheat temperature - the casting cools toward this,
+!      not toward plain room temperature)
+!
+! Material property tables (Enthalpy/Heat Capacity/Heat Conductivity)
+! and the Heat Transfer Coefficient curve have their upper temperature
+! breakpoint widened to 1060 K (values unchanged, domain only) so the
+! highest pouring temperature in this sweep (1033 K) stays inside the
+! tabulated range.
+!
+! TIMESTEPPING - CALIBRATED SHARED SCHEDULE (validated against the two
+! extreme corners of this sweep: pour953/mould403 and pour1033/mould303
+! both converge to within 0.4 K of their target mould temperature by
+! t=2400s). Every other combination in this sweep sits between these
+! two extremes and settles at least as fast, so this single schedule
+! is used for all 15 cases without per-case tailoring:
+!   Stage 1 (0-60s):     dt=0.1s,  600 steps
+!   Stage 2 (60-300s):   dt=1.0s,  240 steps
+!   Stage 3 (300-800s):  dt=5.0s,  100 steps
+!   Stage 4 (800-2400s): dt=20.0s,  80 steps
+! ============================================================================
+
+Simulation
+  Max Output Level = 5
+  Coordinate System = String "Cartesian"
+  Coordinate Mapping(3) = 1 2 3
+
+  Coordinate Scaling = Real 0.001
+  Simulation Type = String "Transient"
+
+  Timestepping Method = String "BDF"
+  BDF Order = 2
+
+  Steady State Max Iterations = 5
+
+  Timestep intervals(4) = 600   240   100   80
+  Timestep Sizes(4)     = 0.1   1.0   5.0   20.0
+End
+
+Constants
+  Gravity(4) = 0 0 -1 9.81
+  Stefan Boltzmann = 5.67e-08
+End
+
+! --- BODY -------------------------------------------------------------------
+Body 1
+  Target Bodies(1) = 2
+  Name = String "body1"
+  Equation = 1
+  Material = 1
+  Initial Condition = 1
+End
+
+! --- INITIAL CONDITIONS ------------------------------------------------------
+Initial Condition 1
+  Name = String "Freshly_Poured_Flange"
+  Temperature = Real 1013.0
+End
+
+! --- MATERIAL: LM6 / AlSi12 ---------------------------------------------------
+Material 1
+  Name = String "LM6_Aluminum_Alloy"
+  Density = Real 2650.0
+  Reference Temperature = Real 933.0
+
+  Enthalpy = Variable Temperature
+    Real
+      293.0      0.0
+      849.9      0.0
+      850.0      0.0
+      886.0  390000.0
+      1060.0 390000.0
+    End
+
+  Heat Capacity = Variable Temperature
+    Real
+      293.0    871.0
+      473.0    920.0
+      673.0    963.0
+      850.0   1050.0
+      886.0   1080.0
+      1060.0  1080.0
+    End
+
+  Heat Conductivity = Variable Temperature
+    Real
+      293.0   155.0
+      473.0   159.0
+      673.0   163.0
+      850.0   100.0
+      886.0    90.0
+      1060.0   90.0
+    End
+End
+
+! --- EQUATION -----------------------------------------------------------------
+Equation 1
+  Name = String "Thermal_Only"
+  Active Solvers(3) = 1 2 3
+  Convection = String "None"
+  Phase Change Model = String "Spatial 2"
+End
+
+! --- SOLVER 1: HEAT EQUATION ---------------------------------------------------
+Solver 1
+  Equation = String "Heat Equation"
+  Variable = String "Temperature"
+  Procedure = File "HeatSolve" "HeatSolver"
+
+  Linear System Solver = String "Iterative"
+  Linear System Iterative Method = String "BiCGStab"
+  Linear System Max Iterations = 500
+  Linear System Convergence Tolerance = 1.0e-6
+  Linear System Preconditioning = String "ILU1"
+  Linear System Abort Not Converged = Logical False
+  Linear System Residual Output = Integer 0
+
+  Nonlinear System Max Iterations = 20
+  Nonlinear System Convergence Tolerance = 1.0e-5
+  Nonlinear System Newton After Iterations = 8
+  Nonlinear System Newton After Tolerance = 1.0e-3
+End
+
+! --- SOLVER 2: FLUX & GRADIENT ---------------------------------------------------
+Solver 2
+  Equation = String "Flux and Gradient"
+  Procedure = File "FluxSolver" "FluxSolver"
+  Exec Solver = String "After Timestep"
+  Calculate Grad = Logical True
+  Target Variable = String "Temperature"
+  Linear System Solver = String "Iterative"
+  Linear System Iterative Method = String "CG"
+  Linear System Preconditioning = String "ILU0"
+  Linear System Max Iterations = 500
+  Linear System Convergence Tolerance = 1.0e-7
+End
+
+! --- SOLVER 3: VTU OUTPUT ---------------------------------------------------------
+Solver 3
+  Equation = String "ResultOutput"
+  Procedure = File "ResultOutputSolve" "ResultOutputSolver"
+  Exec Solver = String "After Timestep"
+  Output Format = String "Vtu"
+  Output File Name = File "flange_pour1013_mould303_data"
+  Save Geometry Ids = Logical True
+  Scalar Field 1 = String "Temperature"
+End
+
+! --- BOUNDARY CONDITIONS -----------------------------------------------------
+Boundary Condition 1
+  Target Boundaries(1) = 1
+  Name = String "Flange_Surface"
+  External Temperature = Real 303.0
+  Heat Transfer Coefficient = Variable Temperature
+    Real
+      293.0    35.0
+      850.0   110.0
+      868.0   300.0
+      886.0   633.3
+      1060.0  633.3
+    End
+End

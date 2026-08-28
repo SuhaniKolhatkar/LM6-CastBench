@@ -1,0 +1,4 @@
+	sim_id	mean abs err (K)	max abs err (K)
+BEST	Flange_p973_m353_v05	0.68	19.66
+MEDIAN	Flange_p1033_m353_v06	1.03	44.11
+WORST	Flange_p1033_m403_v07	1.31	29.81
